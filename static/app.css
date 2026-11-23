@@ -38,16 +38,16 @@ html, body {
 .page-head {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
+  align-items: center;
+  gap: 20px;
   flex-wrap: wrap;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
-.brand h1 { margin: 0; font-size: 22px; letter-spacing: .3px; display: flex; align-items: center; gap: 10px; line-height: 0; }
+.brand { display: flex; align-items: center; min-height: 44px; }
+.brand h1 { margin: 0; display: flex; align-items: center; line-height: 0; }
 .brand-logo { width: 44px; height: 44px; border-radius: 11px; flex: 0 0 auto; }
 .auth-logo-img { width: 54px; height: 54px; border-radius: 14px; display: block; }
-.subtitle { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
-.head-status { display: flex; gap: 8px; flex-wrap: wrap; }
+.head-status { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; justify-content: flex-end; }
 .pill {
   font-size: 12px;
   padding: 5px 11px;
@@ -66,14 +66,14 @@ html, body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   grid-auto-rows: 1fr;
-  gap: 14px;
-  margin-bottom: 22px;
+  gap: 12px;
+  margin-bottom: 18px;
 }
 .card {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 242px;
+  min-height: 226px;
   background: linear-gradient(180deg, var(--panel-2), var(--panel));
   border: 1px solid var(--line);
   border-left: 4px solid var(--pending);
@@ -176,8 +176,8 @@ html, body {
   background: linear-gradient(180deg, rgba(27, 39, 64, .75), rgba(21, 31, 51, .9));
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 18px 20px;
-  margin-bottom: 18px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
 }
 .panel h2 { margin: 0; font-size: 15px; }
 .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -230,8 +230,8 @@ button[type="submit"]:hover, .btn:hover { background: #2563eb; }
 .summary-chip b.warn { color: #fbbf24; }
 
 /* ------------------------------------------------------------ 图表 */
-.chart-wrap { position: relative; width: 100%; height: 280px; margin-bottom: 8px; }
-.chart-wrap canvas { width: 100%; height: 280px; display: block; }
+.chart-wrap { position: relative; width: 100%; height: 260px; margin-bottom: 8px; }
+.chart-wrap canvas { width: 100%; height: 260px; display: block; }
 .chart-tooltip {
   position: absolute; pointer-events: none; z-index: 5;
   background: rgba(2, 6, 23, .95);
