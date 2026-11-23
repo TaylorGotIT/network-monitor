@@ -25,6 +25,7 @@
     historySeq: 0,
     outages: [],
     expandedChecks: {},
+    knownNodes: {},
     settingsFilled: false,
     lastSseAt: 0,
     chartLayout: null,
@@ -128,12 +129,29 @@
 
   function applySnapshot(data) {
     state.nodes = data.nodes || [];
+    var aliases = (data.config && data.config.known_nodes) || {};
+    var aliasesChanged = JSON.stringify(aliases) !== JSON.stringify(state.knownNodes || {});
+    state.knownNodes = aliases;
     renderCards();
-    renderAliases((data.config && data.config.known_nodes) || {});
+    renderAliases(aliases);
+    if (aliasesChanged && state.outages.length) {
+      renderOutages();
+    }
     syncTargetSelect();
     if (!state.settingsFilled && data.config && data.config.settings) {
       fillSettings(data.config.settings);
     }
+  }
+
+  /* 把文本里的已知 IP 替换成 “别名(IP)” */
+  function withAliases(text) {
+    if (!text) return '';
+    Object.keys(state.knownNodes || {}).forEach(function (ip) {
+      if (text.indexOf(ip) >= 0) {
+        text = text.split(ip).join(state.knownNodes[ip] + '(' + ip + ')');
+      }
+    });
+    return text;
   }
 
   /* 兜底轮询：SSE 异常时仍然能看到最新状态 */
@@ -192,10 +210,8 @@
 
       var detailHtml = '';
       if (node.status === 'down') {
-        var faultText = node.current_fault_node || '正在执行路由追踪…';
-        var titleText = faultText +
-          (node.current_fault_alias ? ' · 别名：' + node.current_fault_alias : '') +
-          (node.last_error ? ' · ' + node.last_error : '');
+        var faultText = withAliases(node.current_fault_node || '正在执行路由追踪…');
+        var titleText = faultText + (node.last_error ? ' · ' + node.last_error : '');
         detailHtml = '<div class="card-detail"><div class="fault-line" title="' +
           esc(titleText) + '">🔍 ' + esc(faultText) + '</div></div>';
       } else if ((node.status === 'degraded' || node.status === 'unknown') && node.last_error) {
@@ -596,7 +612,8 @@
         ' (' + esc(hop.loss) + '% / ' + esc(hop.avg) + 'ms)';
     }).join(' → ');
     return '<div class="mtr-detail">' +
-      '<div class="head">' + esc(check.time) + ' <span class="fault">' + esc(check.fault_node || '') + '</span></div>' +
+      '<div class="head">' + esc(check.time) + ' <span class="fault">' +
+      esc(withAliases(check.fault_node || '')) + '</span></div>' +
       '<div class="hops">' + (hops || '未解析到跳点') + '</div>' +
       '</div>';
   }
