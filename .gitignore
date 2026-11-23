@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+data/
+.smoke/
+.real-check/
+.chrome-*/
+.idea/
+*.log
+Thumbs.db

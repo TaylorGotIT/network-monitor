@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>登录 · 网络质量与断点监控</title>
+<link rel="stylesheet" href="/static/app.css?v=2.2.0" />
+</head>
+<body class="auth-body">
+<main class="auth-card">
+  <div class="auth-logo">📡</div>
+  <h1>网络质量与断点监控</h1>
+  <p class="auth-sub">请登录后查看实时状态与历史数据</p>
+  <form id="loginForm">
+    <label>账号
+      <input type="text" id="username" name="username" autocomplete="username" value="admin" required autofocus />
+    </label>
+    <label>密码
+      <input type="password" id="password" name="password" autocomplete="current-password" required />
+    </label>
+    <button type="submit" id="loginBtn">登录</button>
+    <div id="loginError" class="auth-error" hidden></div>
+  </form>
+  <p class="auth-hint">初始账号 <code>admin</code> / <code>admin@123</code><br />登录后请在「账号管理」中修改密码</p>
+</main>
+<script src="/static/login.js?v=2.2.0"></script>
+</body>
+</html>
