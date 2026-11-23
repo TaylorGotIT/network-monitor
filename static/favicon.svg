@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#12213c"/>
+      <stop offset="1" stop-color="#080f1d"/>
+    </linearGradient>
+    <linearGradient id="globe" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7dd3fc"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="pulse" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#22c55e"/>
+      <stop offset="1" stop-color="#86efac"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.45" r="0.55">
+      <stop offset="0" stop-color="#38bdf8" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <rect x="8" y="8" width="496" height="496" rx="110" fill="none" stroke="#2b3f60" stroke-width="4"/>
+
+  <circle cx="256" cy="232" r="158" fill="url(#glow)"/>
+
+  <!-- 全球互联网：经纬线 -->
+  <g fill="none" stroke="url(#globe)" stroke-width="9" stroke-linecap="round">
+    <circle cx="256" cy="232" r="142"/>
+    <ellipse cx="256" cy="232" rx="64" ry="142" opacity="0.9"/>
+    <ellipse cx="256" cy="232" rx="116" ry="142" opacity="0.42"/>
+    <ellipse cx="256" cy="232" rx="142" ry="50" opacity="0.82"/>
+    <ellipse cx="256" cy="232" rx="142" ry="102" opacity="0.38"/>
+  </g>
+
+  <!-- 跨洲连接 -->
+  <g fill="none" stroke="#22c55e" stroke-width="7" stroke-linecap="round" opacity="0.95">
+    <path d="M168 166 Q256 116 344 164"/>
+    <path d="M188 312 Q256 362 328 304"/>
+    <path d="M168 166 Q148 250 188 312"/>
+    <path d="M344 164 Q370 238 328 304"/>
+  </g>
+
+  <!-- 节点 -->
+  <g>
+    <circle cx="168" cy="166" r="16" fill="#0b1220" stroke="#4ade80" stroke-width="9"/>
+    <circle cx="344" cy="164" r="16" fill="#0b1220" stroke="#4ade80" stroke-width="9"/>
+    <circle cx="188" cy="312" r="14" fill="#0b1220" stroke="#38bdf8" stroke-width="8"/>
+    <circle cx="328" cy="304" r="14" fill="#0b1220" stroke="#38bdf8" stroke-width="8"/>
+  </g>
+
+  <!-- 监控波形 -->
+  <path d="M64 416 H146 L172 416 L194 372 L222 456 L250 394 L272 416 H330 L352 416 L368 388 L390 442 L408 416 H448"
+        fill="none" stroke="url(#pulse)" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M64 416 H146 L172 416 L194 372 L222 456 L250 394 L272 416 H330 L352 416 L368 388 L390 442 L408 416 H448"
+        fill="none" stroke="#22c55e" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" opacity="0.25" filter="url(#soft)"/>
+</svg>

@@ -1,0 +1,14 @@
+{
+  "name": "网络质量与断点监控",
+  "short_name": "网络监控",
+  "description": "ICMP / TCP / UDP 探测、历史延迟与丢包、断网自动 MTR 定位",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "icons": [
+    {"src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "/static/favicon.svg", "sizes": "any", "type": "image/svg+xml"}
+  ]
+}

@@ -475,6 +475,7 @@ def make_app(
     handlers = [
         (r"/", IndexHandler, {"monitor": monitor, "auth": auth, "index_path": index_path}),
         (r"/login", LoginPageHandler, {"monitor": monitor, "auth": auth, "login_path": login_path}),
+        (r"/favicon.ico", tornado.web.RedirectHandler, {"url": "/static/favicon-32.png"}),
         (r"/static/(.*)", tornado.web.StaticFileHandler, {"path": static_dir}),
         (r"/api/login", LoginApiHandler, {"monitor": monitor, "auth": auth}),
         (r"/api/logout", LogoutApiHandler, {"monitor": monitor, "auth": auth}),

@@ -1,5 +1,7 @@
 # 网络质量与断点监控
 
+<img src="static/favicon.svg" width="84" alt="项目图标" />
+
 实时网络质量监控：ICMP / TCP / UDP 探测、按时间查询历史延迟与丢包、断网时自动执行
 MTR / tracert 定位断点。后端 Tornado + SQLite，前端原生 JS（无外部依赖，离线可用）。
 
