@@ -258,7 +258,8 @@ TCP/UDP 端口失败但路由到达主机时，断点会写成「主机可达，
 和 CA 证书，开箱即可做 ICMP / TCP / UDP / MTR 探测。
 
 ```bash
-# 私有仓库的 GHCR 包需要先登录（PAT 勾选 read:packages）
+# GHCR 包默认私有：pull 前先登录（PAT 勾选 read:packages）
+# 在包 Settings → Change visibility 改为 Public 后，即可匿名 pull
 echo "$GITHUB_TOKEN" | docker login ghcr.io -u TaylorGotIT --password-stdin
 
 docker pull ghcr.io/taylorgotit/network-monitor:2.5.8
