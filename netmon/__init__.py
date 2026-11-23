@@ -12,4 +12,4 @@
     netmon.web        Tornado 路由与 API
 """
 
-__version__ = "2.4.3"
+__version__ = "2.5.0"

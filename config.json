@@ -39,20 +39,6 @@
       "retries": 2
     },
     {
-      "id": "dns_google",
-      "name": "Google DNS",
-      "host": "8.8.8.8",
-      "type": "udp",
-      "port": 53,
-      "check": "dns",
-      "sni": null,
-      "path": "/",
-      "payload": null,
-      "expect": null,
-      "query": null,
-      "retries": 2
-    },
-    {
       "id": "t_99e87912",
       "name": "100.64.0.1",
       "host": "100.64.0.1",

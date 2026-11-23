@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>网络质量与断点监控</title>
-<link rel="stylesheet" href="/static/app.css?v=2.4.2" />
+<link rel="stylesheet" href="/static/app.css?v=2.5.0" />
 </head>
 <body>
 <div class="container">
@@ -17,6 +17,8 @@
       <span id="sseStatus" class="pill pill-pending">⏳ 正在连接实时推送…</span>
       <span id="storageInfo" class="pill pill-muted">历史库加载中…</span>
       <span id="userChip" class="pill pill-muted">👤 …</span>
+      <button type="button" id="accountBtn" class="icon-btn" title="账号管理">👤</button>
+      <button type="button" id="settingsBtn" class="icon-btn" title="全局监控参数">⚙️</button>
       <button type="button" id="logoutBtn" class="btn-ghost">退出</button>
     </div>
   </header>
@@ -125,8 +127,15 @@
     <div class="empty" id="outageEmpty" hidden>该时间范围内没有断网事件 🎉</div>
   </section>
 
-  <details class="panel settings" id="accountPanel">
-    <summary><span class="summary-title">👤 账号管理</span><span class="summary-hint">点击展开</span></summary>
+  <footer class="foot">数据保存在本地 <code>data/monitor.db</code>，刷新页面或重启服务都不会丢失历史。</footer>
+</div>
+
+<dialog id="accountDialog" class="dialog">
+  <div class="dialog-head">
+    <h2>👤 账号管理</h2>
+    <button type="button" class="dialog-close" data-close="accountDialog" title="关闭">✕</button>
+  </div>
+  <div class="dialog-body">
     <div id="defaultPwdBanner" class="notice" hidden>⚠️ 当前仍在使用默认密码，请立即修改。</div>
     <div class="account-bar">
       <span>当前账号：<b id="accountName">--</b></span>
@@ -161,10 +170,15 @@
         <button type="submit">添加用户</button>
       </form>
     </div>
-  </details>
+  </div>
+</dialog>
 
-  <details class="panel settings">
-    <summary><span class="summary-title">⚙️ 全局监控参数</span><span class="summary-hint">点击展开</span></summary>
+<dialog id="settingsDialog" class="dialog">
+  <div class="dialog-head">
+    <h2>⚙️ 全局监控参数</h2>
+    <button type="button" class="dialog-close" data-close="settingsDialog" title="关闭">✕</button>
+  </div>
+  <div class="dialog-body">
     <form id="settingsForm" class="form-grid">
       <label>常规检测间隔（秒）<input type="number" id="set_check_interval" min="1" max="3600" /></label>
       <label>统计窗口（次）<input type="number" id="set_window_size" min="2" max="1000" /></label>
@@ -180,11 +194,10 @@
       </div>
     </form>
     <p class="hint">探测历史保存在本地 SQLite；超出保留期的数据每小时自动清理。</p>
-  </details>
+  </div>
+</dialog>
 
-  <footer class="foot">数据保存在本地 <code>data/monitor.db</code>，刷新页面或重启服务都不会丢失历史。</footer>
-</div>
 <div id="toast" class="toast" hidden></div>
-<script src="/static/app.js?v=2.4.2"></script>
+<script src="/static/app.js?v=2.5.0"></script>
 </body>
 </html>

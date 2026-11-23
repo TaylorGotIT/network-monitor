@@ -1011,6 +1011,39 @@
     });
   }
 
+  function bindDialogs() {
+    $('accountBtn').addEventListener('click', function () {
+      openDialog('accountDialog');
+      if ($('adminSection') && !$('adminSection').hidden) loadUsers();
+    });
+    $('settingsBtn').addEventListener('click', function () {
+      openDialog('settingsDialog');
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-close]'), function (button) {
+      button.addEventListener('click', function () {
+        var dialog = $(button.getAttribute('data-close'));
+        if (dialog && dialog.close) dialog.close();
+      });
+    });
+    ['accountDialog', 'settingsDialog'].forEach(function (id) {
+      var dialog = $(id);
+      if (!dialog) return;
+      dialog.addEventListener('click', function (event) {
+        if (event.target === dialog) dialog.close();
+      });
+    });
+  }
+
+  function openDialog(id) {
+    var dialog = $(id);
+    if (!dialog || dialog.open) return;
+    if (typeof dialog.showModal === 'function') {
+      dialog.showModal();
+    } else {
+      dialog.setAttribute('open', '');
+    }
+  }
+
   /* ------------------------------------------------------------ 历史库信息 */
   function refreshHealth() {
     fetch('/api/health').then(function (res) { return res.json(); }).then(function (body) {
@@ -1024,6 +1057,7 @@
   function init() {
     bindEvents();
     bindAccountEvents();
+    bindDialogs();
     initAuth();
     fetch('/api/status').then(function (res) { return res.json(); }).then(applySnapshot).catch(function () {});
     connectSse();
