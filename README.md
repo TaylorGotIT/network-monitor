@@ -228,6 +228,11 @@ TCP/UDP 端口失败但路由到达主机时，断点会写成「主机可达，
 
 除 `/login`、`/api/login` 与 `/static/*` 外，所有接口都需要登录 Cookie。
 
+## 许可
+
+本项目由 **Taylor.Gao** 以 [CC0 1.0 公有领域](https://creativecommons.org/publicdomain/zero/1.0/deed.zh)
+发布：可自由使用、修改、分发，甚至用于商业用途，无需署名。详见 [LICENSE](LICENSE)。
+
 ## 测试
 
 ```bat
