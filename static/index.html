@@ -10,17 +10,17 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png" />
 <link rel="manifest" href="/static/manifest.webmanifest" />
 <meta name="theme-color" content="#0b1220" />
-<link rel="stylesheet" href="/static/app.css?v=2.5.4" />
+<link rel="stylesheet" href="/static/app.css?v=2.5.5" />
 </head>
 <body>
 <div class="container">
   <header class="page-head">
     <div class="brand">
       <h1><img class="brand-logo" src="/static/favicon.svg" width="44" height="44" alt="网络质量与断点监控" title="网络质量与断点监控" /></h1>
-    </div>
-    <div class="head-status">
       <span id="sseStatus" class="pill pill-pending">⏳ 正在连接实时推送…</span>
       <span id="storageInfo" class="pill pill-muted">历史库加载中…</span>
+    </div>
+    <div class="head-status">
       <span id="userChip" class="pill pill-muted">👤 …</span>
       <button type="button" id="accountBtn" class="icon-btn" title="账号管理">👤</button>
       <button type="button" id="settingsBtn" class="icon-btn" title="全局监控参数">⚙️</button>
@@ -203,6 +203,6 @@
 </dialog>
 
 <div id="toast" class="toast" hidden></div>
-<script src="/static/app.js?v=2.5.4"></script>
+<script src="/static/app.js?v=2.5.5"></script>
 </body>
 </html>
