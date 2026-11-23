@@ -73,6 +73,30 @@ class TargetStateTest(unittest.TestCase):
         self.assertEqual(list(state.history), [11.0, 12.0])
         self.assertEqual(state.samples, 2)
 
+    def test_inconclusive_results_do_not_trigger_outage(self):
+        state = make_state()
+        for i in range(4):
+            state.record(ProbeResult.failure("UDP 无响应（服务不回应）", inconclusive=True), 100.0 + i, 3)
+        self.assertEqual(state.status, "unknown")
+        self.assertIsNone(state.online)  # 始终没有被判定为断网
+        self.assertEqual(state.consec_fails, 0)
+        self.assertTrue(state.unknown)
+        # 窗口里仍然有丢包记录
+        self.assertGreater(state.loss, 0)
+
+        state.record(ProbeResult.success(10.0), 200.0, 3)
+        self.assertEqual(state.status, "up")
+        self.assertFalse(state.unknown)
+
+    def test_conclusive_failure_after_unknown_goes_down(self):
+        state = make_state()
+        for i in range(3):
+            state.record(ProbeResult.failure("UDP 无响应", inconclusive=True), 100.0 + i, 3)
+        self.assertEqual(state.status, "unknown")
+        for i in range(3):
+            state.record(ProbeResult.failure("UDP 端口不可达"), 200.0 + i, 3)
+        self.assertEqual(state.status, "down")
+
     def test_to_dict_contains_ui_fields(self):
         state = make_state()
         state.record(ProbeResult.success(9.5), 100.0, 3)

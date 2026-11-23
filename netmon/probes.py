@@ -23,6 +23,7 @@ import platform
 import random
 import re
 import socket
+import ssl
 import struct
 import time
 from typing import List, Optional, Sequence
@@ -219,13 +220,24 @@ def ping_command(host: str, timeout: float) -> List[str]:
     return ["ping", "-c", "1", "-W", str(max(1, int(round(timeout)))), "-n", host]
 
 
-def _dns_query(name: str = "www.baidu.com") -> bytes:
+def _dns_query(name: str = "www.baidu.com", txid: Optional[int] = None) -> bytes:
     """构造一个最小 DNS A 查询，用于 UDP:53 探测。"""
-    txid = random.randrange(0, 65536)
+    if txid is None:
+        txid = random.randrange(0, 65536)
     header = struct.pack("!HHHHHH", txid, 0x0100, 1, 0, 0, 0)
     question = b"".join(bytes([len(part)]) + part.encode("ascii") for part in name.split("."))
     question += b"\x00" + struct.pack("!HH", 1, 1)
     return header + question
+
+
+def _hex_bytes(value: Optional[str]) -> Optional[bytes]:
+    if not value:
+        return None
+    text = str(value).strip().lower().replace("0x", "").replace(" ", "").replace(":", "").replace("-", "")
+    try:
+        return bytes.fromhex(text)
+    except ValueError:
+        return None
 
 
 class IcmpProbe:
@@ -311,23 +323,166 @@ class TcpProbe:
         return ProbeResult.success(rtt)
 
 
-class UdpProbe:
-    """UDP 探测：发出报文后等待任意回包。
+class TlsProbe:
+    """TLS 握手 + 证书校验（含主机名与有效期）。"""
 
-    注意：UDP 没有连接语义，目标端口不开放时通常只会静默丢弃，
-    因此「超时」不一定代表网络故障，可能只是端口被过滤。
+    kind = "tls"
+
+    def __init__(self, host: str, port: int, sni: Optional[str] = None) -> None:
+        self.host = host
+        self.port = int(port)
+        self.sni = sni
+
+    async def measure(self, timeout: float) -> ProbeResult:
+        start = time.perf_counter()
+        context = ssl.create_default_context()
+        try:
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(
+                    self.host, self.port, ssl=context, server_hostname=self.sni or self.host
+                ),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError:
+            return ProbeResult.failure("TLS 握手超时")
+        except ssl.SSLCertVerificationError as exc:
+            return ProbeResult.failure(
+                "TLS 证书校验失败: %s" % (getattr(exc, "verify_message", None) or exc)
+            )
+        except ssl.SSLError as exc:
+            return ProbeResult.failure("TLS 握手失败: %s" % exc)
+        except ConnectionRefusedError:
+            return ProbeResult.failure("TCP 连接被拒绝（端口未监听）")
+        except socket.gaierror as exc:
+            return ProbeResult.failure("域名解析失败: %s" % exc)
+        except OSError as exc:
+            if exc.errno in (errno.ETIMEDOUT, 10060):
+                return ProbeResult.failure("TLS 握手超时")
+            return ProbeResult.failure("TLS 连接失败: %s" % (exc.strerror or exc))
+        except Exception as exc:  # noqa: BLE001
+            return ProbeResult.failure("TLS 探测异常: %s" % exc)
+
+        rtt = (time.perf_counter() - start) * 1000.0
+        cert = None
+        try:
+            ssl_object = writer.get_extra_info("ssl_object")
+            if ssl_object is not None:
+                cert = ssl_object.getpeercert()
+        except Exception:  # noqa: BLE001
+            cert = None
+        try:
+            writer.close()
+            await writer.wait_closed()
+        except Exception:  # noqa: BLE001
+            pass
+        if not cert:
+            return ProbeResult.failure("TLS 未获取到服务器证书")
+        return ProbeResult.success(rtt)
+
+
+class HttpProbe:
+    """HTTP/HTTPS HEAD 请求，校验状态码（2xx/3xx 视为可用）。"""
+
+    kind = "http"
+
+    def __init__(
+        self, host: str, port: int, path: str = "/", use_tls: bool = False, sni: Optional[str] = None
+    ) -> None:
+        self.host = host
+        self.port = int(port)
+        self.path = path or "/"
+        self.use_tls = use_tls
+        self.sni = sni
+
+    async def measure(self, timeout: float) -> ProbeResult:
+        start = time.perf_counter()
+        try:
+            status = await asyncio.wait_for(self._fetch_status(), timeout=timeout)
+        except asyncio.TimeoutError:
+            return ProbeResult.failure("HTTP 请求超时")
+        except ssl.SSLCertVerificationError as exc:
+            return ProbeResult.failure(
+                "TLS 证书校验失败: %s" % (getattr(exc, "verify_message", None) or exc)
+            )
+        except ssl.SSLError as exc:
+            return ProbeResult.failure("TLS 握手失败: %s" % exc)
+        except ConnectionRefusedError:
+            return ProbeResult.failure("TCP 连接被拒绝（端口未监听）")
+        except socket.gaierror as exc:
+            return ProbeResult.failure("域名解析失败: %s" % exc)
+        except OSError as exc:
+            if exc.errno in (errno.ETIMEDOUT, 10060):
+                return ProbeResult.failure("HTTP 请求超时")
+            return ProbeResult.failure("HTTP 探测失败: %s" % (exc.strerror or exc))
+        except Exception as exc:  # noqa: BLE001
+            return ProbeResult.failure("HTTP 探测异常: %s" % exc)
+
+        rtt = (time.perf_counter() - start) * 1000.0
+        if 200 <= status < 400:
+            return ProbeResult.success(rtt)
+        return ProbeResult.failure("HTTP 状态码 %d" % status)
+
+    async def _fetch_status(self) -> int:
+        if self.use_tls:
+            context = ssl.create_default_context()
+            reader, writer = await asyncio.open_connection(
+                self.host, self.port, ssl=context, server_hostname=self.sni or self.host
+            )
+        else:
+            reader, writer = await asyncio.open_connection(self.host, self.port)
+
+        host_header = self.host if self.port in (80, 443) else "%s:%d" % (self.host, self.port)
+        request = (
+            "HEAD %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: NetMonitor/2.3\r\n"
+            "Accept: */*\r\nConnection: close\r\n\r\n" % (self.path, host_header)
+        )
+        try:
+            writer.write(request.encode("ascii", "ignore"))
+            await writer.drain()
+            line = await reader.readline()
+        finally:
+            try:
+                writer.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+        if not line:
+            raise OSError("HTTP 无响应")
+        parts = line.split()
+        if len(parts) < 2 or not parts[0].startswith(b"HTTP/"):
+            raise OSError("HTTP 响应格式错误")
+        try:
+            return int(parts[1])
+        except ValueError:
+            raise OSError("HTTP 状态码无法解析")
+
+
+class UdpProbe:
+    """通用 UDP 探测：发出报文后等待任意回包。
+
+    UDP 没有连接语义，服务不回应这个报文并不代表端口/网络故障，
+    因此超时结果标记为 ``inconclusive``，不会触发断网告警。
     """
 
     kind = "udp"
 
-    def __init__(self, host: str, port: int) -> None:
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        payload: Optional[bytes] = None,
+        expect: Optional[bytes] = None,
+        retries: int = 2,
+    ) -> None:
         self.host = host
         self.port = int(port)
+        self.payload = payload if payload is not None else b"\x00"
+        self.expect = expect
+        self.retries = max(1, int(retries))
 
     async def measure(self, timeout: float) -> ProbeResult:
         loop = asyncio.get_running_loop()
         try:
-            # 显式按 IPv4 解析，避免域名同时有 AAAA 记录时套接字族不匹配
             infos = await asyncio.wait_for(
                 loop.getaddrinfo(self.host, self.port, family=socket.AF_INET, type=socket.SOCK_DGRAM),
                 timeout=timeout,
@@ -339,35 +494,198 @@ class UdpProbe:
         if not infos:
             return ProbeResult.failure("域名解析失败: 无可用地址")
 
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.setblocking(False)
-        start = time.perf_counter()
-        try:
-            await asyncio.wait_for(loop.sock_connect(sock, infos[0][4]), timeout=timeout)
-            payload = _dns_query() if self.port == 53 else b"\x00"
-            await asyncio.wait_for(loop.sock_sendall(sock, payload), timeout=timeout)
-            await asyncio.wait_for(loop.sock_recv(sock, 2048), timeout=timeout)
-            rtt = (time.perf_counter() - start) * 1000.0
-            return ProbeResult.success(rtt)
-        except asyncio.TimeoutError:
-            return ProbeResult.failure("UDP 无响应（端口未开放或被过滤）")
-        except ConnectionRefusedError:
-            return ProbeResult.failure("UDP 端口不可达")
-        except OSError as exc:
-            return ProbeResult.failure("UDP 探测失败: %s" % (exc.strerror or exc))
-        except Exception as exc:  # noqa: BLE001
-            return ProbeResult.failure("UDP 探测异常: %s" % exc)
-        finally:
+        last_error = "UDP 无响应"
+        saw_reply = False
+        for _ in range(self.retries):
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.setblocking(False)
+            start = time.perf_counter()
             try:
-                sock.close()
-            except Exception:  # noqa: BLE001
-                pass
+                await asyncio.wait_for(loop.sock_connect(sock, infos[0][4]), timeout=timeout)
+                await asyncio.wait_for(loop.sock_sendall(sock, self.payload), timeout=timeout)
+                data = await asyncio.wait_for(loop.sock_recv(sock, 2048), timeout=timeout)
+                rtt = (time.perf_counter() - start) * 1000.0
+                if self.expect and self.expect not in data:
+                    saw_reply = True
+                    last_error = "UDP 响应内容不匹配"
+                    continue
+                return ProbeResult.success(rtt)
+            except asyncio.TimeoutError:
+                last_error = "UDP 无响应（端口未开放/被过滤，或服务不回应此报文）"
+                continue
+            except ConnectionRefusedError:
+                return ProbeResult.failure("UDP 端口不可达")
+            except OSError as exc:
+                if getattr(exc, "winerror", None) == 10054 or exc.errno == errno.ECONNREFUSED:
+                    return ProbeResult.failure("UDP 端口不可达")
+                last_error = "UDP 探测失败: %s" % (exc.strerror or exc)
+            except Exception as exc:  # noqa: BLE001
+                last_error = "UDP 探测异常: %s" % exc
+            finally:
+                try:
+                    sock.close()
+                except Exception:  # noqa: BLE001
+                    pass
+        return ProbeResult.failure(last_error, inconclusive=not saw_reply)
+
+
+class DnsProbe:
+    """DNS 查询探测：校验事务 ID、rcode 和应答数量。"""
+
+    kind = "dns"
+
+    def __init__(self, host: str, port: int, name: str = "www.baidu.com", retries: int = 2) -> None:
+        self.host = host
+        self.port = int(port)
+        self.name = name
+        self.retries = max(1, int(retries))
+
+    async def measure(self, timeout: float) -> ProbeResult:
+        loop = asyncio.get_running_loop()
+        try:
+            infos = await asyncio.wait_for(
+                loop.getaddrinfo(self.host, self.port, family=socket.AF_INET, type=socket.SOCK_DGRAM),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError:
+            return ProbeResult.failure("DNS 域名解析超时")
+        except socket.gaierror as exc:
+            return ProbeResult.failure("域名解析失败: %s" % exc)
+        if not infos:
+            return ProbeResult.failure("域名解析失败: 无可用地址")
+
+        last_error = "DNS 查询超时"
+        for _ in range(self.retries):
+            txid = random.randrange(0, 65536)
+            query = _dns_query(self.name, txid)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.setblocking(False)
+            start = time.perf_counter()
+            try:
+                await asyncio.wait_for(loop.sock_connect(sock, infos[0][4]), timeout=timeout)
+                await asyncio.wait_for(loop.sock_sendall(sock, query), timeout=timeout)
+                while True:
+                    data = await asyncio.wait_for(loop.sock_recv(sock, 4096), timeout=timeout)
+                    if len(data) < 12 or data[0:2] != struct.pack("!H", txid):
+                        continue
+                    flags = struct.unpack("!H", data[2:4])[0]
+                    rcode = flags & 0x000F
+                    ancount = struct.unpack("!H", data[6:8])[0]
+                    if rcode != 0:
+                        return ProbeResult.failure("DNS 返回错误码 %d" % rcode)
+                    if ancount == 0:
+                        return ProbeResult.failure("DNS 无解析结果")
+                    rtt = (time.perf_counter() - start) * 1000.0
+                    return ProbeResult.success(rtt)
+            except asyncio.TimeoutError:
+                last_error = "DNS 查询超时"
+                continue
+            except ConnectionRefusedError:
+                return ProbeResult.failure("DNS 端口不可达")
+            except OSError as exc:
+                if getattr(exc, "winerror", None) == 10054 or exc.errno == errno.ECONNREFUSED:
+                    return ProbeResult.failure("DNS 端口不可达")
+                last_error = "DNS 探测失败: %s" % (exc.strerror or exc)
+            except Exception as exc:  # noqa: BLE001
+                last_error = "DNS 探测异常: %s" % exc
+            finally:
+                try:
+                    sock.close()
+                except Exception:  # noqa: BLE001
+                    pass
+        return ProbeResult.failure(last_error)
+
+
+class NtpProbe:
+    """标准 NTP 请求（48 字节），校验响应模式与 stratum。"""
+
+    kind = "ntp"
+
+    def __init__(self, host: str, port: int, retries: int = 2) -> None:
+        self.host = host
+        self.port = int(port)
+        self.retries = max(1, int(retries))
+
+    async def measure(self, timeout: float) -> ProbeResult:
+        loop = asyncio.get_running_loop()
+        try:
+            infos = await asyncio.wait_for(
+                loop.getaddrinfo(self.host, self.port, family=socket.AF_INET, type=socket.SOCK_DGRAM),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError:
+            return ProbeResult.failure("NTP 域名解析超时")
+        except socket.gaierror as exc:
+            return ProbeResult.failure("域名解析失败: %s" % exc)
+        if not infos:
+            return ProbeResult.failure("域名解析失败: 无可用地址")
+
+        payload = bytes([0x1B]) + bytes(47)
+        last_error = "NTP 无响应"
+        for _ in range(self.retries):
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.setblocking(False)
+            start = time.perf_counter()
+            try:
+                await asyncio.wait_for(loop.sock_connect(sock, infos[0][4]), timeout=timeout)
+                await asyncio.wait_for(loop.sock_sendall(sock, payload), timeout=timeout)
+                data = await asyncio.wait_for(loop.sock_recv(sock, 2048), timeout=timeout)
+                if len(data) < 48:
+                    last_error = "NTP 响应过短"
+                    continue
+                mode = data[0] & 0x07
+                stratum = data[1]
+                if mode != 4:
+                    last_error = "NTP 响应模式异常"
+                    continue
+                if stratum == 0:
+                    return ProbeResult.failure("NTP 服务器拒绝（KoD）")
+                if not (1 <= stratum <= 15):
+                    last_error = "NTP stratum 异常"
+                    continue
+                rtt = (time.perf_counter() - start) * 1000.0
+                return ProbeResult.success(rtt)
+            except asyncio.TimeoutError:
+                last_error = "NTP 查询超时"
+                continue
+            except ConnectionRefusedError:
+                return ProbeResult.failure("NTP 端口不可达")
+            except OSError as exc:
+                if getattr(exc, "winerror", None) == 10054 or exc.errno == errno.ECONNREFUSED:
+                    return ProbeResult.failure("NTP 端口不可达")
+                last_error = "NTP 探测失败: %s" % (exc.strerror or exc)
+            except Exception as exc:  # noqa: BLE001
+                last_error = "NTP 探测异常: %s" % exc
+            finally:
+                try:
+                    sock.close()
+                except Exception:  # noqa: BLE001
+                    pass
+        return ProbeResult.failure(last_error)
 
 
 def make_probe(target: Target):
-    """按目标类型创建探针。"""
+    """按目标类型和 check 方式创建探针。"""
     if target.type == "tcp" and target.port:
+        check = target.check if target.check in ("tcp", "tls", "http", "https") else "tcp"
+        if check == "tls":
+            return TlsProbe(target.host, target.port, target.sni)
+        if check == "http":
+            return HttpProbe(target.host, target.port, target.path, use_tls=False, sni=target.sni)
+        if check == "https":
+            return HttpProbe(target.host, target.port, target.path, use_tls=True, sni=target.sni)
         return TcpProbe(target.host, target.port)
     if target.type == "udp" and target.port:
-        return UdpProbe(target.host, target.port)
+        check = target.check if target.check in ("udp", "dns", "ntp") else "udp"
+        if check == "dns":
+            return DnsProbe(target.host, target.port, retries=target.retries)
+        if check == "ntp":
+            return NtpProbe(target.host, target.port, retries=target.retries)
+        return UdpProbe(
+            target.host,
+            target.port,
+            payload=_hex_bytes(target.payload),
+            expect=_hex_bytes(target.expect),
+            retries=target.retries,
+        )
     return IcmpProbe(target.host)

@@ -207,6 +207,31 @@ class WebApiTest(AsyncHTTPTestCase):
         _, status = self.json("/api/status")
         self.assertEqual(len(status["nodes"]), 1)
 
+    def test_add_target_with_check(self):
+        payload = {
+            "name": "TLS 检查",
+            "host": "example.com",
+            "type": "tcp",
+            "port": 443,
+            "check": "tls",
+        }
+        response, body = self.json(
+            "/api/target", method="POST", body=json.dumps(payload),
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(response.code, 200)
+        self.assertEqual(body["target"]["check"], "tls")
+        self.assertEqual(body["target"]["type"], "tcp")
+
+    def test_add_target_invalid_check_falls_back(self):
+        payload = {"name": "x", "host": "example.com", "type": "tcp", "port": 443, "check": "nope"}
+        response, body = self.json(
+            "/api/target", method="POST", body=json.dumps(payload),
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(response.code, 200)
+        self.assertEqual(body["target"]["check"], "tcp")
+
     def test_add_target_validation(self):
         response, body = self.json(
             "/api/target", method="POST", body=json.dumps({"name": "", "host": ""}),

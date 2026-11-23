@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>网络质量与断点监控</title>
-<link rel="stylesheet" href="/static/app.css?v=2.2.11" />
+<link rel="stylesheet" href="/static/app.css?v=2.3.0" />
 </head>
 <body>
 <div class="container">
@@ -85,6 +85,7 @@
             <option value="udp">UDP 端口</option>
           </select>
         </label>
+        <label>探测方式<select id="tCheck"></select></label>
         <label>主机<input type="text" id="tHost" placeholder="IP 或域名" required /></label>
         <label id="tPortWrap" hidden>端口<input type="number" id="tPort" min="1" max="65535" placeholder="443" /></label>
         <div class="form-actions"><button type="submit">➕ 添加</button></div>
@@ -184,6 +185,6 @@
   <footer class="foot">数据保存在本地 <code>data/monitor.db</code>，刷新页面或重启服务都不会丢失历史。</footer>
 </div>
 <div id="toast" class="toast" hidden></div>
-<script src="/static/app.js?v=2.2.11"></script>
+<script src="/static/app.js?v=2.3.0"></script>
 </body>
 </html>

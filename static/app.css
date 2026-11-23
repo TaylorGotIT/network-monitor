@@ -82,6 +82,7 @@ html, body {
 .card:hover { transform: translateY(-1px); }
 .card.up { border-left-color: var(--up); }
 .card.degraded { border-left-color: var(--warn); }
+.card.unknown { border-left-color: #94a3b8; }
 .card.down { border-left-color: var(--down); background: linear-gradient(180deg, #291a20, #1e1418); }
 .card.pending { border-left-color: var(--pending); }
 
@@ -92,6 +93,7 @@ html, body {
 .badge { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
 .badge.up { background: #14532d; color: #bbf7d0; }
 .badge.degraded { background: #78350f; color: #fde68a; }
+.badge.unknown { background: #334155; color: #cbd5e1; }
 .badge.down { background: #7f1d1d; color: #fecaca; animation: pulse 1.6s ease-in-out infinite; }
 .badge.pending { background: #1e293b; color: #cbd5e1; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }

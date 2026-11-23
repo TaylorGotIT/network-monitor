@@ -147,9 +147,25 @@
   var STATUS_META = {
     up: { cls: 'up', label: '在线' },
     degraded: { cls: 'degraded', label: '不稳定' },
+    unknown: { cls: 'unknown', label: '无响应' },
     down: { cls: 'down', label: '断网' },
     pending: { cls: 'pending', label: '检测中' }
   };
+
+  var CHECK_LABELS = {
+    icmp: 'ICMP', tcp: 'TCP', tls: 'TLS', http: 'HTTP', https: 'HTTPS',
+    udp: 'UDP', dns: 'DNS', ntp: 'NTP'
+  };
+
+  var CHECK_CHOICES = {
+    icmp: [['icmp', 'ICMP (Ping)']],
+    tcp: [['tcp', 'TCP 握手'], ['tls', 'TLS + 证书'], ['https', 'HTTPS 请求'], ['http', 'HTTP 请求']],
+    udp: [['udp', 'UDP 通用（可能无响应）'], ['dns', 'DNS 查询'], ['ntp', 'NTP 查询']]
+  };
+
+  function checkLabel(check) {
+    return CHECK_LABELS[check] || String(check || '').toUpperCase();
+  }
 
   function renderCards() {
     var host = $('cards');
@@ -175,7 +191,7 @@
           (node.last_error ? ' · ' + node.last_error : '');
         detailHtml = '<div class="card-detail"><div class="fault-line" title="' +
           esc(titleText) + '">🔍 ' + esc(faultText) + '</div></div>';
-      } else if (node.status === 'degraded' && node.last_error) {
+      } else if ((node.status === 'degraded' || node.status === 'unknown') && node.last_error) {
         detailHtml = '<div class="card-detail"><div class="error-line" title="' +
           esc(node.last_error) + '">⛔ ' + esc(node.last_error) + '</div></div>';
       } else if (node.status === 'pending') {
@@ -186,7 +202,7 @@
         '<button class="del-btn" data-del="' + esc(node.id) + '" title="删除目标">✖</button>' +
         '<div class="card-head"><span class="card-title">' + esc(node.name) + '</span>' +
         '<span class="badge ' + meta.cls + '">' + meta.label + '</span></div>' +
-        '<div class="card-sub">' + esc(String(node.type || '').toUpperCase()) + ' · ' +
+        '<div class="card-sub">' + esc(checkLabel(node.check || node.type)) + ' · ' +
         esc(node.host) + (node.port ? ':' + esc(node.port) : '') + '</div>' +
         '<div class="metrics">' +
         '<div><span class="k">延迟</span><span class="v">' + esc(numText(latency, 'ms')) + '</span></div>' +
@@ -626,6 +642,19 @@
     $('tPort').required = type !== 'icmp';
   }
 
+  function updateCheckOptions() {
+    var type = $('tType').value;
+    var select = $('tCheck');
+    if (!select) return;
+    var previous = select.value;
+    var choices = CHECK_CHOICES[type] || CHECK_CHOICES.icmp;
+    select.innerHTML = choices.map(function (item) {
+      return '<option value="' + esc(item[0]) + '">' + esc(item[1]) + '</option>';
+    }).join('');
+    var values = choices.map(function (item) { return item[0]; });
+    select.value = values.indexOf(previous) >= 0 ? previous : values[0];
+  }
+
   function fillSettings(settings) {
     SETTING_KEYS.forEach(function (key) {
       var input = $('set_' + key);
@@ -647,14 +676,19 @@
   }
 
   function bindEvents() {
-    $('tType').addEventListener('change', togglePortField);
+    $('tType').addEventListener('change', function () {
+      updateCheckOptions();
+      togglePortField();
+    });
     togglePortField();
+    updateCheckOptions();
 
     $('targetForm').addEventListener('submit', function (event) {
       event.preventDefault();
       var payload = {
         name: $('tName').value,
         type: $('tType').value,
+        check: $('tCheck').value,
         host: $('tHost').value,
         port: $('tPort').value
       };

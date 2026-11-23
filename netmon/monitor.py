@@ -21,6 +21,26 @@ from .traceroute import RouteTracer
 log = logging.getLogger(__name__)
 
 
+def _port_failure_reason(error: Optional[str]) -> str:
+    """把底层探测错误压缩成卡片上能读的一句话。"""
+    error = (error or "探测失败").strip()
+    if "TLS 证书" in error:
+        return "TLS 证书校验失败"
+    if "TLS" in error:
+        return "TLS 握手失败"
+    if error.startswith("HTTP 状态码"):
+        return error
+    if "拒绝" in error:
+        return "连接被拒绝，服务未监听"
+    if "超时" in error:
+        return "连接超时，可能被防火墙拦截"
+    if "不可达" in error:
+        return "端口不可达"
+    if "无响应" in error:
+        return "无响应，可能被过滤或服务不回应"
+    return error[:40]
+
+
 class Monitor:
     """一个进程内的监控实例。"""
 
@@ -222,8 +242,21 @@ class Monitor:
         try:
             tracer = RouteTracer(self.config.get("known_nodes") or {}, self.settings.mtr_ping_count)
             result = await tracer.trace(target.host)
+            fault_node = result.get("fault_node")
+            if (
+                state.online is False
+                and target.type in ("tcp", "udp")
+                and target.port
+                and result.get("reached")
+            ):
+                # 路由能到达主机，但端口/TLS/HTTP 检查失败 —— 不能写成「已到达」了事
+                fault_node = "[%s] 主机可达，端口 %d 不通（%s）" % (
+                    result.get("tool") or "trace",
+                    target.port,
+                    _port_failure_reason(state.last_error),
+                )
             if state.online is False:
-                state.current_fault_node = result.get("fault_node")
+                state.current_fault_node = fault_node
                 state.current_fault_alias = result.get("fault_alias") or None
                 state.current_fault_ip = result.get("fault_ip")
             if state.active_outage_id:
@@ -231,7 +264,7 @@ class Monitor:
                     state.active_outage_id,
                     time.time(),
                     now_str(),
-                    result.get("fault_node"),
+                    fault_node,
                     result.get("hops") or [],
                 )
         except asyncio.CancelledError:
@@ -299,7 +332,9 @@ class Monitor:
                 pass
 
     # ---------------------------------------------------------------- 配置操作
-    def add_target(self, name: str, host: str, target_type: str, port: Any) -> Dict[str, Any]:
+    def add_target(
+        self, name: str, host: str, target_type: str, port: Any, check: Optional[str] = None
+    ) -> Dict[str, Any]:
         name = (name or "").strip()
         host = (host or "").strip()
         target_type = (target_type or "").strip().lower()
@@ -311,7 +346,13 @@ class Monitor:
             raise ValueError("TCP/UDP 协议必须指定端口号")
 
         normalized = config_mod.normalize_target(
-            {"name": name, "host": host, "type": target_type, "port": port}
+            {
+                "name": name,
+                "host": host,
+                "type": target_type,
+                "port": port,
+                "check": check,
+            }
         )
         if not normalized:
             raise ValueError("主机地址或端口不合法")

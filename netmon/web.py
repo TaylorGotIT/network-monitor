@@ -334,6 +334,7 @@ class TargetHandler(AuthenticatedHandler):
                 payload.get("host", ""),
                 payload.get("type", "icmp"),
                 payload.get("port"),
+                payload.get("check"),
             )
             self.write_json({"ok": True, "target": target})
         except (ValueError, json.JSONDecodeError) as exc:

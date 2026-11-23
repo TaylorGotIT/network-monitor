@@ -25,9 +25,9 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
 }
 
 DEFAULT_TARGETS: List[Dict[str, Any]] = [
-    {"id": "dns_ali", "name": "阿里 DNS", "host": "223.5.5.5", "type": "icmp", "port": None},
-    {"id": "web_baidu", "name": "百度 HTTPS", "host": "www.baidu.com", "type": "tcp", "port": 443},
-    {"id": "dns_google", "name": "Google DNS", "host": "8.8.8.8", "type": "udp", "port": 53},
+    {"id": "dns_ali", "name": "阿里 DNS", "host": "223.5.5.5", "type": "icmp", "port": None, "check": "icmp"},
+    {"id": "web_baidu", "name": "百度 HTTPS", "host": "www.baidu.com", "type": "tcp", "port": 443, "check": "tls"},
+    {"id": "dns_google", "name": "Google DNS", "host": "8.8.8.8", "type": "udp", "port": 53, "check": "dns"},
 ]
 
 DEFAULT_KNOWN_NODES: Dict[str, str] = {
@@ -37,6 +37,15 @@ DEFAULT_KNOWN_NODES: Dict[str, str] = {
 }
 
 PROTOCOLS = ("icmp", "tcp", "udp")
+
+# 每种协议可选的探测方式
+CHECK_OPTIONS = {
+    "icmp": ("icmp",),
+    "tcp": ("tcp", "tls", "http", "https"),
+    "udp": ("udp", "dns", "ntp"),
+}
+DEFAULT_CHECK = {"icmp": "icmp", "tcp": "tcp", "udp": "udp"}
+_HEX_RE = re.compile(r"^[0-9a-f]+$")
 
 # 参数 -> (最小值, 最大值)
 INT_RANGES = {
@@ -121,6 +130,21 @@ def _split_host_port(host: str):
     return host, None
 
 
+def normalize_hex(value: Any) -> Optional[str]:
+    """把 ``00 1b ff`` / ``0x001b`` 之类的十六进制串规范成小写连续串。"""
+    if value in (None, ""):
+        return None
+    text = str(value).strip().lower()
+    text = text.replace("0x", "").replace(" ", "").replace(":", "").replace("-", "")
+    if not text or len(text) % 2 or not _HEX_RE.match(text):
+        return None
+    try:
+        bytes.fromhex(text)
+    except ValueError:
+        return None
+    return text
+
+
 def normalize_target(raw: Any, used_ids: Optional[set] = None) -> Optional[Dict[str, Any]]:
     """校验单个监控目标；不合法时返回 None。"""
     if not isinstance(raw, dict):
@@ -152,6 +176,26 @@ def normalize_target(raw: Any, used_ids: Optional[set] = None) -> Optional[Dict[
     if not name:
         name = host
 
+    check = str(raw.get("check") or "").strip().lower()
+    if check not in CHECK_OPTIONS[ptype]:
+        check = DEFAULT_CHECK[ptype]
+
+    sni = str(raw.get("sni") or "").strip() or None
+    if check not in ("tls", "https"):
+        sni = None
+
+    path = str(raw.get("path") or "/").strip() or "/"
+    if not path.startswith("/"):
+        path = "/" + path
+    if check not in ("http", "https"):
+        path = "/"
+
+    payload = normalize_hex(raw.get("payload")) if ptype == "udp" and check == "udp" else None
+    expect = normalize_hex(raw.get("expect")) if ptype == "udp" and check == "udp" else None
+    retries = 2
+    if ptype == "udp" and check == "udp":
+        retries = max(1, min(10, _to_int(raw.get("retries"), 2)))
+
     tid = str(raw.get("id") or "").strip() or "t_%s" % uuid.uuid4().hex[:8]
     if used_ids is not None:
         base = tid
@@ -160,7 +204,19 @@ def normalize_target(raw: Any, used_ids: Optional[set] = None) -> Optional[Dict[
             tid = "%s_%d" % (base, suffix)
             suffix += 1
 
-    return {"id": tid, "name": name, "host": host, "type": ptype, "port": port}
+    return {
+        "id": tid,
+        "name": name,
+        "host": host,
+        "type": ptype,
+        "port": port,
+        "check": check,
+        "sni": sni,
+        "path": path,
+        "payload": payload,
+        "expect": expect,
+        "retries": retries,
+    }
 
 
 def normalize_config(raw: Any) -> Dict[str, Any]:

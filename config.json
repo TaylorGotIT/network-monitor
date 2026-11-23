@@ -15,35 +15,65 @@
       "name": "阿里 DNS",
       "host": "223.5.5.5",
       "type": "icmp",
-      "port": null
+      "port": null,
+      "check": "icmp",
+      "sni": null,
+      "path": "/",
+      "payload": null,
+      "expect": null,
+      "retries": 2
     },
     {
       "id": "web_baidu",
       "name": "百度 HTTPS",
       "host": "www.baidu.com",
       "type": "tcp",
-      "port": 443
+      "port": 443,
+      "check": "tls",
+      "sni": null,
+      "path": "/",
+      "payload": null,
+      "expect": null,
+      "retries": 2
     },
     {
       "id": "dns_google",
       "name": "Google DNS",
       "host": "8.8.8.8",
       "type": "udp",
-      "port": 53
+      "port": 53,
+      "check": "dns",
+      "sni": null,
+      "path": "/",
+      "payload": null,
+      "expect": null,
+      "retries": 2
     },
     {
       "id": "t_99e87912",
       "name": "100.64.0.1",
       "host": "100.64.0.1",
       "type": "icmp",
-      "port": null
+      "port": null,
+      "check": "icmp",
+      "sni": null,
+      "path": "/",
+      "payload": null,
+      "expect": null,
+      "retries": 2
     },
     {
       "id": "t_d9ec456d",
       "name": "谷歌",
       "host": "www.google.com",
       "type": "tcp",
-      "port": 443
+      "port": 443,
+      "check": "tls",
+      "sni": null,
+      "path": "/",
+      "payload": null,
+      "expect": null,
+      "retries": 2
     }
   ],
   "known_nodes": {

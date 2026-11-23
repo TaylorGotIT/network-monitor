@@ -3,7 +3,19 @@ from __future__ import annotations
 
 import unittest
 
-from netmon.probes import decode_console_bytes, parse_ping_output
+from netmon.models import Target
+from netmon.probes import (
+    DnsProbe,
+    HttpProbe,
+    IcmpProbe,
+    NtpProbe,
+    TcpProbe,
+    TlsProbe,
+    UdpProbe,
+    decode_console_bytes,
+    make_probe,
+    parse_ping_output,
+)
 
 ZH_PING_OK = """正在 Ping 223.5.5.5 具有 32 字节的数据:
 来自 223.5.5.5 的回复: 字节=32 时间=16ms TTL=117
@@ -130,6 +142,37 @@ class ParsePingTest(unittest.TestCase):
         result = parse_ping_output("来自 1.2.3.4 的回复: 字节=32 TTL=64", 0)
         self.assertFalse(result.ok)
         self.assertIsNone(result.rtt)
+
+
+class ProbeFactoryTest(unittest.TestCase):
+    def _target(self, target_type, check, port=None, **kwargs):
+        return Target(
+            id="t", name="测试", host="example.com", type=target_type, port=port, check=check, **kwargs
+        )
+
+    def test_tcp_variants(self):
+        self.assertIsInstance(make_probe(self._target("tcp", "tcp", 443)), TcpProbe)
+        self.assertIsInstance(make_probe(self._target("tcp", "tls", 443)), TlsProbe)
+
+        http = make_probe(self._target("tcp", "http", 80))
+        self.assertIsInstance(http, HttpProbe)
+        self.assertFalse(http.use_tls)
+
+        https = make_probe(self._target("tcp", "https", 443))
+        self.assertIsInstance(https, HttpProbe)
+        self.assertTrue(https.use_tls)
+
+    def test_udp_variants(self):
+        generic = make_probe(self._target("udp", "udp", 5000, payload="00ff", retries=3))
+        self.assertIsInstance(generic, UdpProbe)
+        self.assertEqual(generic.payload, b"\x00\xff")
+        self.assertEqual(generic.retries, 3)
+
+        self.assertIsInstance(make_probe(self._target("udp", "dns", 53)), DnsProbe)
+        self.assertIsInstance(make_probe(self._target("udp", "ntp", 123)), NtpProbe)
+
+    def test_icmp(self):
+        self.assertIsInstance(make_probe(self._target("icmp", "icmp")), IcmpProbe)
 
 
 if __name__ == "__main__":

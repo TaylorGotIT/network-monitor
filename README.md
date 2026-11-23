@@ -1,4 +1,4 @@
-﻿# 网络质量与断点监控
+# 网络质量与断点监控
 
 实时网络质量监控：ICMP / TCP / UDP 探测、按时间查询历史延迟与丢包、断网时自动执行
 MTR / tracert 定位断点。后端 Tornado + SQLite，前端原生 JS（无外部依赖，离线可用）。
@@ -91,7 +91,8 @@ python3 app.py
 
 - **登录与账号**：默认管理员 `admin / admin@123`，密码 PBKDF2 加密存储；管理员可添加用户、
   重置密码、删除用户，修改密码后旧会话立即失效。
-- **实时卡片**：延迟、平均、丢包、抖动；状态区分「检测中 / 在线 / 不稳定 / 断网」，
+- **多种探测方式**：ICMP；TCP 握手 / TLS 证书 / HTTP(S) 请求；UDP 通用 / DNS / NTP。
+- **实时卡片**：延迟、平均、丢包、抖动；状态区分「检测中 / 在线 / 不稳定 / 无响应 / 断网」，
   失败时直接显示失败原因（如「ICMP: 来自 192.168.1.1 的回复: 无法访问目标主机」）。
 - **历史曲线**：1 小时 / 6 小时 / 24 小时 / 7 天 / 30 天 / 自定义起止时间；
   左轴平均延迟折线，右轴丢包率柱状；分桶明细表；一键导出 CSV（带 BOM，Excel 直接打开）。
@@ -99,6 +100,43 @@ python3 app.py
   按周期复检并记录每次的断点与完整跳表。
 - **节点别名**：给路由跳点起名，断点跳表里直接显示「电信骨干网出口」。
 - **参数热更新**：检测间隔、窗口大小、失败阈值、MTR 周期、超时、数据保留天数即时生效。
+
+## 探测方式（check）
+
+每个目标除了 `type` / `port`，还可以指定 `check`：
+
+| check | 适用协议 | 行为 |
+| --- | --- | --- |
+| `icmp` | icmp | ping 并解析真实回显 RTT |
+| `tcp` | tcp | TCP 建连（SYN → SYN/ACK） |
+| `tls` | tcp | TLS 握手 + 证书链/主机名/有效期校验 |
+| `https` | tcp | TLS + HTTP HEAD，要求 2xx/3xx |
+| `http` | tcp | 明文 HTTP HEAD，要求 2xx/3xx |
+| `udp` | udp | 发送通用报文等回包；无回包记为「无响应」，不算断网 |
+| `dns` | udp | 标准 DNS 查询，校验 txid / rcode / 应答数 |
+| `ntp` | udp | 标准 48 字节 NTP 请求，校验 mode / stratum |
+
+可选字段：
+
+| 字段 | 说明 |
+| --- | --- |
+| `sni` | TLS/HTTPS 的 SNI，默认使用 `host` |
+| `path` | HTTP/HTTPS 请求路径，默认 `/` |
+| `payload` | 通用 UDP 发送内容（十六进制，如 `00ff`） |
+| `expect` | 通用 UDP 期望回包内容（十六进制子串） |
+| `retries` | 探测重试次数（1-10，默认 2） |
+
+示例：
+
+```json
+{"type": "tcp", "host": "www.baidu.com", "port": 443, "check": "tls"}
+{"type": "udp", "host": "ntp.aliyun.com", "port": 123, "check": "ntp"}
+{"type": "udp", "host": "192.168.1.1", "port": 5000, "check": "udp", "payload": "00ff", "expect": "a1b2", "retries": 3}
+```
+
+不填 `check` 时按协议默认：`icmp→icmp`、`tcp→tcp`、`udp→udp`。
+TCP/UDP 端口失败但路由到达主机时，断点会写成「主机可达，端口 X 不通（原因）」，
+不再误报「已到达」。
 
 ## 默认参数与调优建议
 
@@ -176,7 +214,7 @@ python3 app.py
 | GET | `/api/history/export?...` | 历史数据 CSV |
 | GET | `/api/outages?hours=24&target_id=&limit=` | 断网事件（含跳表） |
 | GET | `/api/health` | 健康状态与库统计 |
-| POST | `/api/target` | 添加目标 `{name,host,type,port}` |
+| POST | `/api/target` | 添加目标 `{name,host,type,port,check}` |
 | DELETE | `/api/target?id=` | 删除目标 |
 | POST | `/api/settings` | 更新参数（服务端会做范围校验） |
 | POST/DELETE | `/api/alias` | 节点别名 |
@@ -186,7 +224,7 @@ python3 app.py
 ## 测试
 
 ```bat
-:: 单元测试（77 个用例：鉴权、ping 解析、路由分析、历史库、监控状态机、HTTP）
+:: 单元测试（84 个用例：鉴权、ping 解析、探测方式、路由分析、历史库、监控状态机、HTTP）
 .\venv\Scripts\python.exe -m unittest discover -s tests -t .
 
 :: 端到端冒烟测试：真实启动服务、真实探测、重启后验证历史仍在
