@@ -31,6 +31,7 @@ class Target:
     path: str = "/"
     payload: Optional[str] = None
     expect: Optional[str] = None
+    query: Optional[str] = None
     retries: int = 2
 
     @classmethod
@@ -54,6 +55,7 @@ class Target:
             path=str(raw.get("path") or "/"),
             payload=raw.get("payload") or None,
             expect=raw.get("expect") or None,
+            query=raw.get("query") or None,
             retries=retries,
         )
 
@@ -69,6 +71,7 @@ class Target:
             "path": self.path,
             "payload": self.payload,
             "expect": self.expect,
+            "query": self.query,
             "retries": self.retries,
         }
 

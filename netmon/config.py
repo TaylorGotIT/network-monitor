@@ -41,11 +41,12 @@ PROTOCOLS = ("icmp", "tcp", "udp")
 # 每种协议可选的探测方式
 CHECK_OPTIONS = {
     "icmp": ("icmp",),
-    "tcp": ("tcp", "tls", "http", "https"),
+    "tcp": ("tcp", "tls", "http", "https", "dot", "doh"),
     "udp": ("udp", "dns", "ntp"),
 }
 DEFAULT_CHECK = {"icmp": "icmp", "tcp": "tcp", "udp": "udp"}
 _HEX_RE = re.compile(r"^[0-9a-f]+$")
+_QUERY_RE = re.compile(r"^[A-Za-z0-9_.-]{1,253}$")
 
 # 参数 -> (最小值, 最大值)
 INT_RANGES = {
@@ -181,19 +182,28 @@ def normalize_target(raw: Any, used_ids: Optional[set] = None) -> Optional[Dict[
         check = DEFAULT_CHECK[ptype]
 
     sni = str(raw.get("sni") or "").strip() or None
-    if check not in ("tls", "https"):
+    if check not in ("tls", "https", "dot", "doh"):
         sni = None
 
     path = str(raw.get("path") or "/").strip() or "/"
     if not path.startswith("/"):
         path = "/" + path
-    if check not in ("http", "https"):
+    if check in ("http", "https", "doh"):
+        if check == "doh" and path in ("", "/"):
+            path = "/dns-query"
+    else:
         path = "/"
+
+    query = str(raw.get("query") or "").strip().lower() or None
+    if query and not _QUERY_RE.match(query):
+        query = None
+    if check not in ("dns", "dot", "doh"):
+        query = None
 
     payload = normalize_hex(raw.get("payload")) if ptype == "udp" and check == "udp" else None
     expect = normalize_hex(raw.get("expect")) if ptype == "udp" and check == "udp" else None
     retries = 2
-    if ptype == "udp" and check == "udp":
+    if check in ("udp", "dns", "ntp", "dot", "doh") and ptype in ("tcp", "udp"):
         retries = max(1, min(10, _to_int(raw.get("retries"), 2)))
 
     tid = str(raw.get("id") or "").strip() or "t_%s" % uuid.uuid4().hex[:8]
@@ -215,6 +225,7 @@ def normalize_target(raw: Any, used_ids: Optional[set] = None) -> Optional[Dict[
         "path": path,
         "payload": payload,
         "expect": expect,
+        "query": query,
         "retries": retries,
     }
 

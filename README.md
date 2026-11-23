@@ -115,15 +115,18 @@ python3 app.py
 | `udp` | udp | 发送通用报文等回包；无回包记为「无响应」，不算断网 |
 | `dns` | udp | 标准 DNS 查询，校验 txid / rcode / 应答数 |
 | `ntp` | udp | 标准 48 字节 NTP 请求，校验 mode / stratum |
+| `dot` | tcp | DNS over TLS（RFC 7858，默认 853），TLS + 长度前缀 |
+| `doh` | tcp | DNS over HTTPS（RFC 8484，默认 443 `/dns-query`），TLS + POST |
 
 可选字段：
 
 | 字段 | 说明 |
 | --- | --- |
-| `sni` | TLS/HTTPS 的 SNI，默认使用 `host` |
-| `path` | HTTP/HTTPS 请求路径，默认 `/` |
+| `sni` | TLS/HTTPS/DoT/DoH 的 SNI，默认使用 `host` |
+| `path` | HTTP/HTTPS 请求路径；DoH 默认 `/dns-query` |
 | `payload` | 通用 UDP 发送内容（十六进制，如 `00ff`） |
 | `expect` | 通用 UDP 期望回包内容（十六进制子串） |
+| `query` | DNS/DoT/DoH 查询的域名，默认 `www.baidu.com` |
 | `retries` | 探测重试次数（1-10，默认 2） |
 
 示例：
@@ -131,6 +134,8 @@ python3 app.py
 ```json
 {"type": "tcp", "host": "www.baidu.com", "port": 443, "check": "tls"}
 {"type": "udp", "host": "ntp.aliyun.com", "port": 123, "check": "ntp"}
+{"type": "tcp", "host": "dns.google", "port": 853, "check": "dot", "query": "example.com"}
+{"type": "tcp", "host": "dns.alidns.com", "port": 443, "check": "doh", "path": "/dns-query"}
 {"type": "udp", "host": "192.168.1.1", "port": 5000, "check": "udp", "payload": "00ff", "expect": "a1b2", "retries": 3}
 ```
 
@@ -224,7 +229,7 @@ TCP/UDP 端口失败但路由到达主机时，断点会写成「主机可达，
 ## 测试
 
 ```bat
-:: 单元测试（84 个用例：鉴权、ping 解析、探测方式、路由分析、历史库、监控状态机、HTTP）
+:: 单元测试（85 个用例：鉴权、ping 解析、探测方式、路由分析、历史库、监控状态机、HTTP）
 .\venv\Scripts\python.exe -m unittest discover -s tests -t .
 
 :: 端到端冒烟测试：真实启动服务、真实探测、重启后验证历史仍在

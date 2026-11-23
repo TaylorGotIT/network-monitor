@@ -6,6 +6,8 @@ import unittest
 from netmon.models import Target
 from netmon.probes import (
     DnsProbe,
+    DohProbe,
+    DotProbe,
     HttpProbe,
     IcmpProbe,
     NtpProbe,
@@ -170,6 +172,16 @@ class ProbeFactoryTest(unittest.TestCase):
 
         self.assertIsInstance(make_probe(self._target("udp", "dns", 53)), DnsProbe)
         self.assertIsInstance(make_probe(self._target("udp", "ntp", 123)), NtpProbe)
+
+    def test_dns_over_tls_and_https(self):
+        dot = make_probe(self._target("tcp", "dot", 853, query="dns.google"))
+        self.assertIsInstance(dot, DotProbe)
+        self.assertEqual(dot.query, "dns.google")
+
+        doh = make_probe(self._target("tcp", "doh", 443, query="dns.google"))
+        self.assertIsInstance(doh, DohProbe)
+        self.assertEqual(doh.path, "/dns-query")
+        self.assertEqual(doh.query, "dns.google")
 
     def test_icmp(self):
         self.assertIsInstance(make_probe(self._target("icmp", "icmp")), IcmpProbe)

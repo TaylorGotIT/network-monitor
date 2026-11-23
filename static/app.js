@@ -154,13 +154,20 @@
 
   var CHECK_LABELS = {
     icmp: 'ICMP', tcp: 'TCP', tls: 'TLS', http: 'HTTP', https: 'HTTPS',
-    udp: 'UDP', dns: 'DNS', ntp: 'NTP'
+    udp: 'UDP', dns: 'DNS', ntp: 'NTP', dot: 'DoT', doh: 'DoH'
   };
 
   var CHECK_CHOICES = {
     icmp: [['icmp', 'ICMP (Ping)']],
-    tcp: [['tcp', 'TCP 握手'], ['tls', 'TLS + 证书'], ['https', 'HTTPS 请求'], ['http', 'HTTP 请求']],
+    tcp: [
+      ['tcp', 'TCP 握手'], ['tls', 'TLS + 证书'], ['https', 'HTTPS 请求'],
+      ['http', 'HTTP 请求'], ['dot', 'DoT (DNS over TLS)'], ['doh', 'DoH (DNS over HTTPS)']
+    ],
     udp: [['udp', 'UDP 通用（可能无响应）'], ['dns', 'DNS 查询'], ['ntp', 'NTP 查询']]
+  };
+
+  var CHECK_PORTS = {
+    tls: '443', https: '443', http: '80', dot: '853', doh: '443', dns: '53', ntp: '123'
   };
 
   function checkLabel(check) {
@@ -653,6 +660,14 @@
     }).join('');
     var values = choices.map(function (item) { return item[0]; });
     select.value = values.indexOf(previous) >= 0 ? previous : values[0];
+    updatePortDefault();
+  }
+
+  function updatePortDefault() {
+    var portInput = $('tPort');
+    if (!portInput || portInput.value) return;
+    var check = $('tCheck') ? $('tCheck').value : '';
+    if (CHECK_PORTS[check]) portInput.value = CHECK_PORTS[check];
   }
 
   function fillSettings(settings) {
@@ -680,6 +695,7 @@
       updateCheckOptions();
       togglePortField();
     });
+    $('tCheck').addEventListener('change', updatePortDefault);
     togglePortField();
     updateCheckOptions();
 

@@ -21,6 +21,7 @@
       "path": "/",
       "payload": null,
       "expect": null,
+      "query": null,
       "retries": 2
     },
     {
@@ -34,6 +35,7 @@
       "path": "/",
       "payload": null,
       "expect": null,
+      "query": null,
       "retries": 2
     },
     {
@@ -47,6 +49,7 @@
       "path": "/",
       "payload": null,
       "expect": null,
+      "query": null,
       "retries": 2
     },
     {
@@ -60,6 +63,7 @@
       "path": "/",
       "payload": null,
       "expect": null,
+      "query": null,
       "retries": 2
     },
     {
@@ -73,6 +77,21 @@
       "path": "/",
       "payload": null,
       "expect": null,
+      "query": null,
+      "retries": 2
+    },
+    {
+      "id": "t_91e0288f",
+      "name": "谷歌DNS",
+      "host": "8.8.8.8",
+      "type": "udp",
+      "port": 53,
+      "check": "dns",
+      "sni": null,
+      "path": "/",
+      "payload": null,
+      "expect": null,
+      "query": null,
       "retries": 2
     }
   ],

@@ -240,6 +240,22 @@ def _hex_bytes(value: Optional[str]) -> Optional[bytes]:
         return None
 
 
+def _dns_response_error(data: bytes, txid: int) -> Optional[str]:
+    """校验 DNS 应答，返回错误描述；None 表示应答可用。"""
+    if len(data) < 12:
+        return "DNS 响应过短"
+    if data[0:2] != struct.pack("!H", txid):
+        return "DNS 事务 ID 不匹配"
+    flags = struct.unpack("!H", data[2:4])[0]
+    rcode = flags & 0x000F
+    if rcode != 0:
+        return "DNS 返回错误码 %d" % rcode
+    ancount = struct.unpack("!H", data[6:8])[0]
+    if ancount == 0:
+        return "DNS 无解析结果"
+    return None
+
+
 class IcmpProbe:
     """调用系统 ping 命令做一次 ICMP 探测。"""
 
@@ -566,15 +582,11 @@ class DnsProbe:
                 await asyncio.wait_for(loop.sock_sendall(sock, query), timeout=timeout)
                 while True:
                     data = await asyncio.wait_for(loop.sock_recv(sock, 4096), timeout=timeout)
-                    if len(data) < 12 or data[0:2] != struct.pack("!H", txid):
+                    error = _dns_response_error(data, txid)
+                    if error in ("DNS 响应过短", "DNS 事务 ID 不匹配"):
                         continue
-                    flags = struct.unpack("!H", data[2:4])[0]
-                    rcode = flags & 0x000F
-                    ancount = struct.unpack("!H", data[6:8])[0]
-                    if rcode != 0:
-                        return ProbeResult.failure("DNS 返回错误码 %d" % rcode)
-                    if ancount == 0:
-                        return ProbeResult.failure("DNS 无解析结果")
+                    if error:
+                        return ProbeResult.failure(error)
                     rtt = (time.perf_counter() - start) * 1000.0
                     return ProbeResult.success(rtt)
             except asyncio.TimeoutError:
@@ -664,21 +676,236 @@ class NtpProbe:
         return ProbeResult.failure(last_error)
 
 
+class DotProbe:
+    """DNS over TLS（RFC 7858）：TLS 连接 + 2 字节长度前缀。"""
+
+    kind = "dot"
+
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        sni: Optional[str] = None,
+        query: str = "www.baidu.com",
+        retries: int = 2,
+    ) -> None:
+        self.host = host
+        self.port = int(port)
+        self.sni = sni
+        self.query = query or "www.baidu.com"
+        self.retries = max(1, int(retries))
+
+    async def measure(self, timeout: float) -> ProbeResult:
+        context = ssl.create_default_context()
+        start = time.perf_counter()
+        try:
+            reader, writer = await asyncio.wait_for(
+                asyncio.open_connection(
+                    self.host, self.port, ssl=context, server_hostname=self.sni or self.host
+                ),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError:
+            return ProbeResult.failure("DoT 连接超时")
+        except ssl.SSLCertVerificationError as exc:
+            return ProbeResult.failure(
+                "TLS 证书校验失败: %s" % (getattr(exc, "verify_message", None) or exc)
+            )
+        except ssl.SSLError as exc:
+            return ProbeResult.failure("DoT TLS 握手失败: %s" % exc)
+        except ConnectionRefusedError:
+            return ProbeResult.failure("TCP 连接被拒绝（端口未监听）")
+        except socket.gaierror as exc:
+            return ProbeResult.failure("域名解析失败: %s" % exc)
+        except OSError as exc:
+            return ProbeResult.failure("DoT 连接失败: %s" % (exc.strerror or exc))
+        except Exception as exc:  # noqa: BLE001
+            return ProbeResult.failure("DoT 探测异常: %s" % exc)
+
+        last_error = "DoT 查询超时"
+        try:
+            for _ in range(self.retries):
+                txid = random.randrange(0, 65536)
+                query = _dns_query(self.query, txid)
+                writer.write(struct.pack("!H", len(query)) + query)
+                await writer.drain()
+                raw_length = await asyncio.wait_for(reader.readexactly(2), timeout=timeout)
+                length = struct.unpack("!H", raw_length)[0]
+                data = await asyncio.wait_for(reader.readexactly(length), timeout=timeout)
+                error = _dns_response_error(data, txid)
+                if error:
+                    if error in ("DNS 响应过短", "DNS 事务 ID 不匹配"):
+                        last_error = error
+                        continue
+                    return ProbeResult.failure(error)
+                rtt = (time.perf_counter() - start) * 1000.0
+                return ProbeResult.success(rtt)
+        except asyncio.TimeoutError:
+            last_error = "DoT 查询超时"
+        except (ConnectionResetError, OSError) as exc:
+            last_error = "DoT 连接中断: %s" % (getattr(exc, "strerror", None) or exc)
+        finally:
+            try:
+                writer.close()
+            except Exception:  # noqa: BLE001
+                pass
+        return ProbeResult.failure(last_error)
+
+
+class DohProbe:
+    """DNS over HTTPS（RFC 8484）：POST application/dns-message。"""
+
+    kind = "doh"
+
+    def __init__(
+        self,
+        host: str,
+        port: int,
+        path: str = "/dns-query",
+        sni: Optional[str] = None,
+        query: str = "www.baidu.com",
+        retries: int = 2,
+    ) -> None:
+        self.host = host
+        self.port = int(port)
+        self.path = path or "/dns-query"
+        self.sni = sni
+        self.query = query or "www.baidu.com"
+        self.retries = max(1, int(retries))
+
+    async def measure(self, timeout: float) -> ProbeResult:
+        start = time.perf_counter()
+        last_error = "DoH 请求超时"
+        for _ in range(self.retries):
+            try:
+                status, body, txid = await asyncio.wait_for(self._request(), timeout=timeout)
+            except asyncio.TimeoutError:
+                last_error = "DoH 请求超时"
+                continue
+            except ssl.SSLCertVerificationError as exc:
+                return ProbeResult.failure(
+                    "TLS 证书校验失败: %s" % (getattr(exc, "verify_message", None) or exc)
+                )
+            except ssl.SSLError as exc:
+                return ProbeResult.failure("DoH TLS 握手失败: %s" % exc)
+            except ConnectionRefusedError:
+                return ProbeResult.failure("TCP 连接被拒绝（端口未监听）")
+            except socket.gaierror as exc:
+                return ProbeResult.failure("域名解析失败: %s" % exc)
+            except OSError as exc:
+                last_error = "DoH 请求失败: %s" % (exc.strerror or exc)
+                continue
+            except Exception as exc:  # noqa: BLE001
+                last_error = "DoH 探测异常: %s" % exc
+                continue
+
+            if status != 200:
+                return ProbeResult.failure("DoH HTTP 状态码 %d" % status)
+            error = _dns_response_error(body, txid)
+            if error:
+                last_error = error
+                continue
+            rtt = (time.perf_counter() - start) * 1000.0
+            return ProbeResult.success(rtt)
+        return ProbeResult.failure(last_error)
+
+    async def _request(self):
+        txid = random.randrange(0, 65536)
+        query = _dns_query(self.query, txid)
+        context = ssl.create_default_context()
+        reader, writer = await asyncio.open_connection(
+            self.host, self.port, ssl=context, server_hostname=self.sni or self.host
+        )
+        host_header = self.host if self.port == 443 else "%s:%d" % (self.host, self.port)
+        headers = (
+            "POST %s HTTP/1.1\r\nHost: %s\r\nUser-Agent: NetMonitor/2.4\r\n"
+            "Content-Type: application/dns-message\r\nAccept: application/dns-message\r\n"
+            "Content-Length: %d\r\nConnection: close\r\n\r\n"
+            % (self.path, host_header, len(query))
+        )
+        try:
+            writer.write(headers.encode("ascii", "ignore") + query)
+            await writer.drain()
+            status_line = await reader.readline()
+            if not status_line:
+                raise OSError("DoH 无响应")
+            parts = status_line.split()
+            if len(parts) < 2:
+                raise OSError("DoH 响应格式错误")
+            status = int(parts[1])
+
+            response_headers = {}
+            while True:
+                line = await reader.readline()
+                if line in (b"\r\n", b"\n", b""):
+                    break
+                if b":" in line:
+                    key, value = line.split(b":", 1)
+                    response_headers[key.strip().lower()] = value.strip()
+
+            if response_headers.get(b"transfer-encoding", b"").lower().endswith(b"chunked"):
+                chunks = []
+                while True:
+                    size_line = await reader.readline()
+                    size = int(size_line.split(b";")[0], 16)
+                    if size == 0:
+                        await reader.readline()
+                        break
+                    chunks.append(await reader.readexactly(size))
+                    await reader.readexactly(2)
+                body = b"".join(chunks)
+            else:
+                length = response_headers.get(b"content-length")
+                if length is not None:
+                    body = await reader.readexactly(int(length))
+                else:
+                    body = await reader.read()
+        finally:
+            try:
+                writer.close()
+            except Exception:  # noqa: BLE001
+                pass
+        return status, body, txid
+
+
 def make_probe(target: Target):
     """按目标类型和 check 方式创建探针。"""
     if target.type == "tcp" and target.port:
-        check = target.check if target.check in ("tcp", "tls", "http", "https") else "tcp"
+        check = target.check if target.check in ("tcp", "tls", "http", "https", "dot", "doh") else "tcp"
         if check == "tls":
             return TlsProbe(target.host, target.port, target.sni)
         if check == "http":
             return HttpProbe(target.host, target.port, target.path, use_tls=False, sni=target.sni)
         if check == "https":
             return HttpProbe(target.host, target.port, target.path, use_tls=True, sni=target.sni)
+        if check == "dot":
+            return DotProbe(
+                target.host,
+                target.port,
+                target.sni,
+                target.query or "www.baidu.com",
+                target.retries,
+            )
+        if check == "doh":
+            path = target.path if target.path not in ("", "/") else "/dns-query"
+            return DohProbe(
+                target.host,
+                target.port,
+                path,
+                target.sni,
+                target.query or "www.baidu.com",
+                target.retries,
+            )
         return TcpProbe(target.host, target.port)
     if target.type == "udp" and target.port:
         check = target.check if target.check in ("udp", "dns", "ntp") else "udp"
         if check == "dns":
-            return DnsProbe(target.host, target.port, retries=target.retries)
+            return DnsProbe(
+                target.host,
+                target.port,
+                target.query or "www.baidu.com",
+                retries=target.retries,
+            )
         if check == "ntp":
             return NtpProbe(target.host, target.port, retries=target.retries)
         return UdpProbe(
