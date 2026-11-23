@@ -329,12 +329,18 @@ class TargetHandler(AuthenticatedHandler):
     def post(self) -> None:
         try:
             payload = self.read_json_body()
+            extra = {
+                key: payload[key]
+                for key in ("sni", "path", "payload", "expect", "query", "retries")
+                if key in payload
+            }
             target = self.monitor.add_target(
                 payload.get("name", ""),
                 payload.get("host", ""),
                 payload.get("type", "icmp"),
                 payload.get("port"),
                 payload.get("check"),
+                **extra
             )
             self.write_json({"ok": True, "target": target})
         except (ValueError, json.JSONDecodeError) as exc:

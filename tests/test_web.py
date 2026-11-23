@@ -232,6 +232,24 @@ class WebApiTest(AsyncHTTPTestCase):
         self.assertEqual(response.code, 200)
         self.assertEqual(body["target"]["check"], "tcp")
 
+    def test_add_udp_target_with_payload(self):
+        payload = {
+            "name": "UDP 示例",
+            "host": "ntp.aliyun.com",
+            "type": "udp",
+            "port": 123,
+            "check": "udp",
+            "payload": "1b00",
+            "retries": 3,
+        }
+        response, body = self.json(
+            "/api/target", method="POST", body=json.dumps(payload),
+            headers={"Content-Type": "application/json"},
+        )
+        self.assertEqual(response.code, 200)
+        self.assertEqual(body["target"]["payload"], "1b00")
+        self.assertEqual(body["target"]["retries"], 3)
+
     def test_add_target_validation(self):
         response, body = self.json(
             "/api/target", method="POST", body=json.dumps({"name": "", "host": ""}),

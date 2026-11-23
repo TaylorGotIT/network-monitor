@@ -158,6 +158,19 @@ class MonitorTest(unittest.TestCase):
         finally:
             monitor.store.close()
 
+    def test_add_target_with_advanced_options(self):
+        monitor = Monitor(self.config_path, self.db_path)
+        try:
+            target = monitor.add_target(
+                "UDP 示例", "ntp.aliyun.com", "udp", 123, "udp", payload="1b00", retries=3
+            )
+            self.assertEqual(target["payload"], "1b00")
+            self.assertEqual(target["retries"], 3)
+            self.assertEqual(target["check"], "udp")
+            self.assertEqual(monitor.targets[target["id"]].payload, "1b00")
+        finally:
+            monitor.store.close()
+
     def test_history_rejects_unknown_target(self):
         monitor = Monitor(self.config_path, self.db_path)
         try:

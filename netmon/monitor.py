@@ -333,7 +333,13 @@ class Monitor:
 
     # ---------------------------------------------------------------- 配置操作
     def add_target(
-        self, name: str, host: str, target_type: str, port: Any, check: Optional[str] = None
+        self,
+        name: str,
+        host: str,
+        target_type: str,
+        port: Any,
+        check: Optional[str] = None,
+        **extra: Any
     ) -> Dict[str, Any]:
         name = (name or "").strip()
         host = (host or "").strip()
@@ -345,15 +351,18 @@ class Monitor:
         if target_type in ("tcp", "udp") and port in (None, "", 0, "0"):
             raise ValueError("TCP/UDP 协议必须指定端口号")
 
-        normalized = config_mod.normalize_target(
-            {
-                "name": name,
-                "host": host,
-                "type": target_type,
-                "port": port,
-                "check": check,
-            }
-        )
+        raw = {
+            "name": name,
+            "host": host,
+            "type": target_type,
+            "port": port,
+            "check": check,
+        }
+        for key in ("sni", "path", "payload", "expect", "query", "retries"):
+            if key in extra:
+                raw[key] = extra[key]
+
+        normalized = config_mod.normalize_target(raw)
         if not normalized:
             raise ValueError("主机地址或端口不合法")
 
