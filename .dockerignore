@@ -1,0 +1,17 @@
+.git
+.github
+build
+dist
+data
+venv
+.venv
+tests
+.smoke
+.real-check
+.chrome-*
+__pycache__
+*.pyc
+*.log
+*.spec
+README.md
+packaging

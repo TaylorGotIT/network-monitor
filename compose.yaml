@@ -1,0 +1,13 @@
+services:
+  network-monitor:
+    image: ghcr.io/taylorgotit/network-monitor:2.5.8
+    container_name: network-monitor
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./data:/data
+    environment:
+      - TZ=Asia/Shanghai
+    cap_add:
+      - NET_RAW

@@ -250,6 +250,35 @@ TCP/UDP 端口失败但路由到达主机时，断点会写成「主机可达，
 
 除 `/login`、`/api/login` 与 `/static/*` 外，所有接口都需要登录 Cookie。
 
+## Docker
+
+镜像地址：`ghcr.io/taylorgotit/network-monitor:2.5.8`
+
+镜像基于 `python:3.12-slim-bookworm`，已预装 `ping`（iputils-ping）、`traceroute`、`mtr-tiny`
+和 CA 证书，开箱即可做 ICMP / TCP / UDP / MTR 探测。
+
+```bash
+# 私有仓库的 GHCR 包需要先登录（PAT 勾选 read:packages）
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u TaylorGotIT --password-stdin
+
+docker pull ghcr.io/taylorgotit/network-monitor:2.5.8
+
+docker run -d --name network-monitor \
+  --restart unless-stopped \
+  -p 8888:8888 \
+  -v "$PWD/data:/data" \
+  -e TZ=Asia/Shanghai \
+  --cap-add NET_RAW \
+  ghcr.io/taylorgotit/network-monitor:2.5.8
+```
+
+或直接 `docker compose up -d`（使用仓库里的 `compose.yaml`）。
+
+- 配置与数据库：容器内 `/data/`，挂载出来即可持久化；
+- 端口：`8888`；
+- 健康检查：`/login`；
+- 平台：`linux/amd64`、`linux/arm64`。
+
 ## 许可
 
 本项目采用最常用的开源许可 [MIT License](LICENSE)：可自由使用、修改、分发、商用，
