@@ -1,0 +1,22 @@
+[Unit]
+Description=Network Quality and Outage Monitor
+Documentation=https://github.com/TaylorGotIT/network-monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=network-monitor
+Group=network-monitor
+WorkingDirectory=/opt/network-monitor
+ExecStart=/usr/bin/python3 /opt/network-monitor/app.py --host 0.0.0.0 --port 8888 --config /var/lib/network-monitor/config.json --db /var/lib/network-monitor/monitor.db --static /opt/network-monitor/static
+Restart=on-failure
+RestartSec=5
+StateDirectory=network-monitor
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

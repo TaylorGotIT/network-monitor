@@ -89,6 +89,28 @@ python3 app.py
 | `--debug` | 关 | Tornado 调试模式 |
 | `-v` | 关 | 输出调试日志 |
 
+## 下载安装包
+
+发布页：<https://github.com/TaylorGotIT/network-monitor/releases>
+
+### Windows
+
+1. 下载 `NetworkMonitor-<version>-win64.exe`；
+2. 放到有写权限的目录（配置 `config.json` 和 `data/` 会生成在 exe 同目录），双击运行；
+3. 浏览器打开 <http://127.0.0.1:8888>，初始账号 `admin / admin@123`。
+
+### Ubuntu / Debian
+
+```bash
+sudo apt install ./network-monitor_<version>_all.deb
+sudo systemctl status network-monitor
+```
+
+- 服务监听 `0.0.0.0:8888`，开机自启；
+- 配置与数据库：`/var/lib/network-monitor/`；
+- 程序目录：`/opt/network-monitor/`；
+- 卸载：`sudo apt remove network-monitor`；连数据一起删：`sudo apt purge network-monitor`。
+
 ## 功能
 
 - **登录与账号**：默认管理员 `admin / admin@123`，密码 PBKDF2 加密存储；管理员可添加用户、

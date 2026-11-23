@@ -8,4 +8,7 @@ data/
 .chrome-*/
 .idea/
 *.log
+build/
+dist/
+*.spec
 Thumbs.db

@@ -15,9 +15,15 @@ from netmon.monitor import Monitor
 from netmon.web import make_app
 
 ROOT = Path(__file__).resolve().parent
+BUNDLE = ROOT
+if getattr(sys, "frozen", False):
+    # PyInstaller onefile：代码/静态资源在临时解包目录，配置与数据放在 exe 同目录
+    ROOT = Path(sys.executable).resolve().parent
+    BUNDLE = Path(getattr(sys, "_MEIPASS", ROOT))
+
 DEFAULT_CONFIG = ROOT / "config.json"
 DEFAULT_DB = ROOT / "data" / "monitor.db"
-DEFAULT_STATIC = ROOT / "static"
+DEFAULT_STATIC = BUNDLE / "static"
 DEFAULT_LEGACY_LOGS = ROOT / "monitor_data.json"
 
 

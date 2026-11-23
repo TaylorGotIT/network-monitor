@@ -1,0 +1,43 @@
+{
+  "settings": {
+    "check_interval": 10,
+    "window_size": 30,
+    "fail_threshold": 5,
+    "mtr_recheck_interval": 300,
+    "mtr_ping_count": 5,
+    "timeout": 3.0,
+    "raw_retention_days": 7,
+    "rollup_retention_days": 180
+  },
+  "targets": [
+    {
+      "id": "dns_ali",
+      "name": "阿里 DNS",
+      "host": "223.5.5.5",
+      "type": "icmp",
+      "port": null,
+      "check": "icmp"
+    },
+    {
+      "id": "web_baidu",
+      "name": "百度 HTTPS",
+      "host": "www.baidu.com",
+      "type": "tcp",
+      "port": 443,
+      "check": "tls"
+    },
+    {
+      "id": "dns_google",
+      "name": "Google DNS",
+      "host": "8.8.8.8",
+      "type": "udp",
+      "port": 53,
+      "check": "dns"
+    }
+  ],
+  "known_nodes": {
+    "192.168.1.1": "本地内网网关",
+    "100.64.0.1": "运营商 CGNAT 节点",
+    "202.97.33.1": "电信骨干网出口"
+  }
+}
